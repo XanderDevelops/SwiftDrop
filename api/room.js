@@ -20,7 +20,6 @@ export default async function handler(request, response) {
       return response.status(404).json({ error: 'Room not found' });
     }
     
-    // Update the room with the answer
     const updatedRoom = { ...room, answer };
     await kv.set(`room_${code}`, JSON.stringify(updatedRoom), { ex: 300 });
 

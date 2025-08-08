@@ -82,6 +82,7 @@
         function resetApp() {
             if (peerConnection) peerConnection.close();
             if (pollingInterval) clearInterval(pollingInterval);
+            document.getElementById('room-code-input').value = '';
             showView('home-view');
         }
 
@@ -127,16 +128,22 @@
 
         function pollForAnswer(code) {
             pollingInterval = setInterval(async () => {
-                const response = await fetch(`/api/room?code=${code}`);
-                if (response.ok) {
-                    const room = await response.json();
-                    if (room.answer) {
+                try {
+                    const response = await fetch(`/api/room?code=${code}`);
+                    if (response.ok) {
+                        const room = await response.json();
+                        if (room.answer) {
+                            clearInterval(pollingInterval);
+                            await peerConnection.setRemoteDescription(room.answer);
+                        }
+                    } else {
                         clearInterval(pollingInterval);
-                        await peerConnection.setRemoteDescription(room.answer);
+                        alert('Room expired or does not exist.');
+                        resetApp();
                     }
-                } else {
+                } catch(e) {
                     clearInterval(pollingInterval);
-                    alert('Room expired or does not exist.');
+                    alert('Connection to server lost.');
                     resetApp();
                 }
             }, 3000);
