@@ -1,360 +1,238 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SwiftDrop - Local File Transfer</title>
+    <title>SwiftDrop - Simple File Transfer</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
-
-        body {
-            font-family: 'Poppins', sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #f0f2f5;
-            margin: 0;
-            color: #333;
-        }
-
-        #app-container {
-            width: 450px;
-            background: #ffffff;
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            padding: 30px;
-            text-align: center;
-            transition: all 0.3s ease;
-        }
-
+        body { font-family: system-ui, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f0f2f5; margin: 0; }
+        #app { width: 400px; background: #fff; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); padding: 30px; text-align: center; }
+        .view { display: none; }
+        .view.active { display: block; }
         h1 { font-size: 1.8rem; color: #1a237e; margin-bottom: 20px; }
-        h2 { font-size: 1.5rem; margin-bottom: 10px; }
-        h3 { margin-top: 20px; }
-        
-        .btn {
-            display: inline-block;
-            padding: 12px 25px;
-            margin: 5px;
-            font-size: 1rem;
-            font-weight: 600;
-            border-radius: 8px;
-            cursor: pointer;
-            text-decoration: none;
-            border: none;
-            transition: background-color 0.3s, transform 0.1s;
-        }
+        .btn { display: inline-block; padding: 12px 25px; margin: 10px 5px; font-size: 1rem; font-weight: 600; border-radius: 8px; cursor: pointer; border: none; transition: all 0.2s; }
         .btn:hover { transform: translateY(-2px); }
-
         .btn-primary { background-color: #1976d2; color: white; }
-        .btn-primary:hover { background-color: #1565c0; }
-
         .btn-secondary { background-color: #f0f2f5; color: #333; border: 1px solid #d1d8e0; }
-        .btn-secondary:hover { background-color: #e9ecef; }
-        
-        #drop-zone {
-            border: 2px dashed #d1d8e0;
-            border-radius: 12px;
-            padding: 40px 20px;
-            margin-top: 20px;
-            cursor: pointer;
-        }
-        input[type="file"] { display: none; }
-
-        textarea {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 8px;
-            border: 1px solid #d1d8e0;
-            font-family: monospace;
-            font-size: 0.9rem;
-            box-sizing: border-box;
-            resize: none;
-        }
-        textarea:focus {
-            outline: none;
-            border-color: #1976d2;
-            box-shadow: 0 0 5px rgba(25, 118, 210, 0.5);
-        }
-
-        /* Progress Bar */
-        #progress-bar-container { width: 100%; height: 10px; background-color: #e0e0e0; border-radius: 5px; overflow: hidden; margin: 15px 0 5px 0; }
-        #progress-bar { width: 0; height: 100%; background-color: #1976d2; border-radius: 5px; transition: width 0.2s ease-in-out; }
-        #file-name { font-weight: 600; color: #333; word-break: break-all; margin-bottom: 20px; }
-
+        #room-code-input { font-size: 2rem; text-align: center; letter-spacing: 0.5em; width: 100%; padding: 10px 0; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
+        #room-code-display { font-size: 2.5rem; font-weight: 600; color: #1a237e; letter-spacing: 0.1em; margin: 20px 0; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #1976d2; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #progress-bar { width: 100%; height: 10px; background-color: #e0e0e0; border-radius: 5px; overflow: hidden; margin: 15px 0 5px 0; }
+        #progress { width: 0; height: 100%; background-color: #1976d2; transition: width 0.2s; }
     </style>
 </head>
 <body>
-    <div id="app-container">
-        <h1>SwiftDrop</h1>
-
-        <!-- Step 1: Choose Role -->
-        <div id="role-selection-view">
-            <h2>What would you like to do?</h2>
-            <button id="start-send-button" class="btn btn-primary">Send a File</button>
-            <button id="start-receive-button" class="btn btn-primary">Receive a File</button>
+    <div id="app">
+        <!-- Home View -->
+        <div id="home-view" class="view active">
+            <h1>SwiftDrop</h1>
+            <button id="send-btn" class="btn btn-primary">Send File</button>
+            <button id="receive-btn" class="btn btn-primary">Receive File</button>
         </div>
 
-        <!-- Sender Step 2: Select a File -->
-        <div id="file-selection-view" style="display: none;">
-            <h2>Select a File to Send</h2>
-            <div id="drop-zone">
-                <p>Drag & Drop file</p>
-                <p>or</p>
-                <label for="file-input" class="btn btn-primary">Select File</label>
-                <input type="file" id="file-input">
-            </div>
-            <p id="selected-file-name"></p>
-            <button id="sender-back-button" class="btn btn-secondary">Back</button>
+        <!-- Sender Views -->
+        <div id="sender-loading-view" class="view">
+            <h2>Generating your code...</h2>
+            <div class="loader"></div>
         </div>
-        
-        <!-- Handshake View for both Sender and Receiver -->
-        <div id="handshake-view" style="display: none;">
-            <div id="sender-handshake-content">
-                <h3>Step 1: Your Sender Code</h3>
-                <p>Copy this code and give it to the Receiver.</p>
-                <textarea id="sender-code-textarea" readonly rows="4"></textarea>
-                <h3>Step 2: Their Receiver Code</h3>
-                <p>Paste the code from the Receiver below.</p>
-                <textarea id="receiver-code-textarea" placeholder="Paste receiver's code here..." rows="4"></textarea>
-                <button id="connect-button" class="btn btn-primary">Connect</button>
-                <button id="sender-cancel-button" class="btn btn-secondary">Cancel</button>
-            </div>
-            <div id="receiver-handshake-content">
-                <h3>Step 1: Their Sender Code</h3>
-                <p>Paste the code from the Sender below.</p>
-                <textarea id="receiver-paste-sender-code" placeholder="Paste sender's code here..." rows="4"></textarea>
-                <h3>Step 2: Your Receiver Code</h3>
-                <p>Copy this code and give it back to the Sender.</p>
-                <textarea id="receiver-show-own-code" readonly rows="4"></textarea>
-                 <div id="receiver-waiting-message" style="display:none;">
-                    <h3>Waiting for Sender...</h3>
-                    <p>Once the sender connects, the download will begin.</p>
-                </div>
-                <button id="receiver-cancel-button" class="btn btn-secondary">Cancel</button>
-            </div>
+        <div id="sender-code-view" class="view">
+            <h2>Your Transfer Code:</h2>
+            <div id="room-code-display"></div>
+            <p>Tell the receiver to enter this code.</p>
+            <h3>Waiting for receiver to connect...</h3>
+            <div class="loader"></div>
+            <button class="btn btn-secondary cancel-btn">Cancel</button>
         </div>
-        
+
+        <!-- Receiver View -->
+        <div id="receiver-view" class="view">
+            <h2>Enter Transfer Code</h2>
+            <input type="text" id="room-code-input" maxlength="6" />
+            <button id="join-btn" class="btn btn-primary">Join</button>
+            <button class="btn btn-secondary cancel-btn">Cancel</button>
+        </div>
+
         <!-- Progress View -->
-        <div id="progress-view" style="display: none;">
-            <h3 id="status">Transferring...</h3>
-            <div id="progress-bar-container">
-                <div id="progress-bar"></div>
-            </div>
+        <div id="progress-view" class="view">
+            <h3 id="status"></h3>
+            <div id="progress-bar"><div id="progress"></div></div>
             <p id="progress-text"></p>
         </div>
-        
-        <!-- Send Complete View -->
-        <div id="send-complete-view" style="display: none;">
-             <h2>File Sent!</h2>
-             <p>The file has been successfully sent.</p>
-             <button id="send-another-button" class="btn btn-primary">Send Another File</button>
-        </div>
-        
-        <!-- Receive Complete View -->
-        <div id="receive-complete-view" style="display: none;">
-            <h2>Download Complete!</h2>
-            <p id="file-name"></p>
-            <button id="receive-another-button" class="btn btn-primary">Receive Another</button>
+
+        <!-- Complete View -->
+        <div id="complete-view" class="view">
+            <h2 id="complete-title"></h2>
+            <p id="complete-message"></p>
+            <button class="btn btn-primary" onclick="resetApp()">Start Another Transfer</button>
         </div>
     </div>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.6/StreamSaver.min.js"></script>
     <script>
-        // --- All the JavaScript logic goes here ---
         const streamSaver = window.streamSaver;
-
-        // --- UI Element Map ---
-        const views = {
-            roleSelection: document.getElementById('role-selection-view'),
-            fileSelection: document.getElementById('file-selection-view'),
-            handshake: document.getElementById('handshake-view'),
-            progress: document.getElementById('progress-view'),
-            sendComplete: document.getElementById('send-complete-view'),
-            receiveComplete: document.getElementById('receive-complete-view')
-        };
-        const senderHandshakeContent = document.getElementById('sender-handshake-content');
-        const receiverHandshakeContent = document.getElementById('receiver-handshake-content');
-
-        // --- State & Config ---
         let peerConnection;
         let dataChannel;
-        let selectedFile;
-        const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+        let pollingInterval;
 
-        // --- UI Management ---
-        function showView(viewName) {
-            for (let key in views) views[key].style.display = 'none';
-            views[viewName].style.display = 'block';
+        const views = document.querySelectorAll('.view');
+        function showView(viewId) {
+            views.forEach(v => v.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
         }
 
         function resetApp() {
             if (peerConnection) peerConnection.close();
-            selectedFile = null;
-            document.getElementById('file-input').value = '';
-            document.getElementById('selected-file-name').textContent = '';
-            showView('roleSelection');
+            if (pollingInterval) clearInterval(pollingInterval);
+            showView('home-view');
         }
 
-        // --- Role Selection ---
-        document.getElementById('start-send-button').addEventListener('click', () => showView('fileSelection'));
-        document.getElementById('start-receive-button').addEventListener('click', startReceiverFlow);
-        
-        // --- SENDER WORKFLOW ---
-        document.getElementById('sender-back-button').addEventListener('click', resetApp);
-        document.getElementById('file-input').addEventListener('change', e => handleFileSelect(e.target.files[0]));
-        document.getElementById('drop-zone').addEventListener('dragover', e => { e.preventDefault(); });
-        document.getElementById('drop-zone').addEventListener('drop', e => { e.preventDefault(); handleFileSelect(e.dataTransfer.files[0]); });
+        document.querySelectorAll('.cancel-btn').forEach(b => b.addEventListener('click', resetApp));
 
-        function handleFileSelect(file) {
-            if (file) {
-                selectedFile = file;
-                document.getElementById('selected-file-name').textContent = `Selected: ${file.name}`;
-                createOffer();
-            }
-        }
+        // --- SENDER LOGIC ---
+        document.getElementById('send-btn').addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.onchange = e => startSending(e.target.files[0]);
+            input.click();
+        });
 
-        async function createOffer() {
-            peerConnection = new RTCPeerConnection(configuration);
+        async function startSending(file) {
+            if (!file) return;
+            showView('sender-loading-view');
+            peerConnection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
             dataChannel = peerConnection.createDataChannel('fileTransfer');
-            setupDataChannelHandlers();
+            dataChannel.onopen = () => sendFile(file);
 
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
 
-            peerConnection.onicecandidate = event => {
+            peerConnection.onicecandidate = async event => {
                 if (!event.candidate) {
-                    document.getElementById('sender-code-textarea').value = JSON.stringify(peerConnection.localDescription);
-                    receiverHandshakeContent.style.display = 'none';
-                    senderHandshakeContent.style.display = 'block';
-                    showView('handshake');
-                }
-            };
-        }
-
-        document.getElementById('connect-button').addEventListener('click', async () => {
-            if (!document.getElementById('receiver-code-textarea').value) return alert('Please paste the Receiver Code.');
-            try {
-                const answer = JSON.parse(document.getElementById('receiver-code-textarea').value);
-                await peerConnection.setRemoteDescription(answer);
-            } catch (e) {
-                alert('Invalid Receiver Code. Please try again.');
-            }
-        });
-
-        // --- RECEIVER WORKFLOW ---
-        function startReceiverFlow() {
-            peerConnection = new RTCPeerConnection(configuration);
-            peerConnection.ondatachannel = event => {
-                dataChannel = event.channel;
-                setupDataChannelHandlers();
-            };
-
-            const senderCodeInput = document.getElementById('receiver-paste-sender-code');
-            senderCodeInput.addEventListener('input', async () => {
-                if (!senderCodeInput.value) return;
-                try {
-                    const offer = JSON.parse(senderCodeInput.value);
-                    await peerConnection.setRemoteDescription(offer);
-
-                    const answer = await peerConnection.createAnswer();
-                    await peerConnection.setLocalDescription(answer);
-
-                    peerConnection.onicecandidate = event => {
-                        if (!event.candidate) {
-                            document.getElementById('receiver-show-own-code').value = JSON.stringify(peerConnection.localDescription);
-                            document.getElementById('receiver-waiting-message').style.display = 'block';
-                        }
-                    };
-                } catch (e) {
-                    alert('Invalid Sender Code. Please try again.');
-                    resetApp();
-                }
-            });
-            
-            senderHandshakeContent.style.display = 'none';
-            receiverHandshakeContent.style.display = 'block';
-            showView('handshake');
-        }
-
-        // --- Cancel/Reset Buttons ---
-        document.getElementById('sender-cancel-button').addEventListener('click', resetApp);
-        document.getElementById('receiver-cancel-button').addEventListener('click', resetApp);
-        document.getElementById('send-another-button').addEventListener('click', resetApp);
-        document.getElementById('receive-another-button').addEventListener('click', resetApp);
-        
-        // --- DATA TRANSFER LOGIC (Works for both roles) ---
-        function setupDataChannelHandlers() {
-            dataChannel.onopen = () => {
-                if (selectedFile) { // Sender starts the transfer
-                    showView('progress');
-                    sendFile();
-                }
-            };
-
-            let writer;
-            let receivedSize = 0;
-            let fileInfo = {};
-
-            dataChannel.onmessage = event => {
-                const { data } = event;
-                if (typeof data === 'string') {
-                    fileInfo = JSON.parse(data);
-                    receivedSize = 0;
-                    writer = streamSaver.createWriteStream(fileInfo.name, { size: fileInfo.size }).getWriter();
-                    showView('progress');
-                    document.getElementById('status').textContent = `Receiving: ${fileInfo.name}`;
-                } else if (writer) {
-                    writer.write(new Uint8Array(data));
-                    receivedSize += data.byteLength;
-                    const progress = Math.round((receivedSize / fileInfo.size) * 100);
-                    document.getElementById('progress-bar').style.width = `${progress}%`;
-                    document.getElementById('progress-text').textContent = `${progress}%`;
-
-                    if (receivedSize === fileInfo.size) {
-                        writer.close();
-                        document.getElementById('file-name').textContent = `${fileInfo.name} saved to your Downloads.`;
-                        showView('receiveComplete');
+                    try {
+                        const response = await fetch('/api/create', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ offer: peerConnection.localDescription })
+                        });
+                        const { code } = await response.json();
+                        document.getElementById('room-code-display').textContent = code;
+                        showView('sender-code-view');
+                        pollForAnswer(code);
+                    } catch (e) {
+                        alert('Error: Could not connect to server.');
+                        resetApp();
                     }
                 }
             };
         }
 
-        async function sendFile() {
-            const CHUNK_SIZE = 262144;
-            document.getElementById('status').textContent = `Sending: ${selectedFile.name}`;
-            dataChannel.send(JSON.stringify({ name: selectedFile.name, size: selectedFile.size }));
+        function pollForAnswer(code) {
+            pollingInterval = setInterval(async () => {
+                const response = await fetch(`/api/room?code=${code}`);
+                if (response.ok) {
+                    const room = await response.json();
+                    if (room.answer) {
+                        clearInterval(pollingInterval);
+                        await peerConnection.setRemoteDescription(room.answer);
+                    }
+                } else {
+                    clearInterval(pollingInterval);
+                    alert('Room expired or does not exist.');
+                    resetApp();
+                }
+            }, 3000);
+        }
 
+        async function sendFile(file) {
+            showView('progress-view');
+            const status = document.getElementById('status');
+            const progress = document.getElementById('progress');
+            const progressText = document.getElementById('progress-text');
+
+            status.textContent = `Sending: ${file.name}`;
+            dataChannel.send(JSON.stringify({ name: file.name, size: file.size }));
+
+            const CHUNK_SIZE = 262144;
             let offset = 0;
             const fileReader = new FileReader();
-            
-            function readSlice(o) {
-                const slice = selectedFile.slice(o, o + CHUNK_SIZE);
-                fileReader.readAsArrayBuffer(slice);
-            }
 
-            fileReader.onload = async event => {
-                // Wait if buffer is full (backpressure)
-                while (dataChannel.bufferedAmount > dataChannel.bufferedAmountLowThreshold) {
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
-                dataChannel.send(event.target.result);
-                offset += event.target.result.byteLength;
+            fileReader.onload = e => {
+                dataChannel.send(e.target.result);
+                offset += e.target.result.byteLength;
+                const percent = Math.round((offset / file.size) * 100);
+                progress.style.width = `${percent}%`;
+                progressText.textContent = `${percent}%`;
 
-                const progress = Math.round((offset / selectedFile.size) * 100);
-                document.getElementById('progress-bar').style.width = `${progress}%`;
-                document.getElementById('progress-text').textContent = `${progress}%`;
-
-                if (offset < selectedFile.size) {
+                if (offset < file.size) {
                     readSlice(offset);
                 } else {
-                    showView('sendComplete');
+                    document.getElementById('complete-title').textContent = 'File Sent!';
+                    document.getElementById('complete-message').textContent = `Successfully sent ${file.name}.`;
+                    showView('complete-view');
                 }
             };
+            const readSlice = o => fileReader.readAsArrayBuffer(file.slice(o, o + CHUNK_SIZE));
             readSlice(0);
         }
 
-        // --- App Initialization ---
-        document.addEventListener('DOMContentLoaded', resetApp);
+        // --- RECEIVER LOGIC ---
+        document.getElementById('receive-btn').addEventListener('click', () => showView('receiver-view'));
+        document.getElementById('join-btn').addEventListener('click', async () => {
+            const code = document.getElementById('room-code-input').value;
+            if (code.length !== 6) return alert('Please enter a 6-digit code.');
+
+            const response = await fetch(`/api/room?code=${code}`);
+            if (!response.ok) return alert('Room not found. Please check the code.');
+            const room = await response.json();
+            
+            peerConnection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+            peerConnection.ondatachannel = event => {
+                dataChannel = event.channel;
+                receiveFile();
+            };
+
+            await peerConnection.setRemoteDescription(room.offer);
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+
+            peerConnection.onicecandidate = async event => {
+                if (!event.candidate) {
+                    await fetch('/api/room', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code, answer: peerConnection.localDescription })
+                    });
+                }
+            };
+        });
+
+        function receiveFile() {
+            showView('progress-view');
+            const status = document.getElementById('status');
+            const progress = document.getElementById('progress');
+            const progressText = document.getElementById('progress-text');
+            let fileInfo, writer, receivedSize = 0;
+
+            dataChannel.onmessage = e => {
+                if (typeof e.data === 'string') {
+                    fileInfo = JSON.parse(e.data);
+                    writer = streamSaver.createWriteStream(fileInfo.name, { size: fileInfo.size }).getWriter();
+                    status.textContent = `Receiving: ${fileInfo.name}`;
+                } else if (writer) {
+                    writer.write(new Uint8Array(e.data));
+                    receivedSize += e.data.byteLength;
+                    const percent = Math.round((receivedSize / fileInfo.size) * 100);
+                    progress.style.width = `${percent}%`;
+                    progressText.textContent = `${percent}%`;
+
+                    if (receivedSize === fileInfo.size) {
+                        writer.close();
+                        document.getElementById('complete-title').textContent = 'Download Complete!';
+                        document.getElementById('complete-message').textContent = `${fileInfo.name} has been saved to your Downloads.`;
+                        showView('complete-view');
+                    }
+                }
+            };
+        }
     </script>
 </body>
 </html>
