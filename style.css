@@ -37,6 +37,24 @@ h2 {
     overflow: hidden;
 }
 
+textarea {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 8px;
+    border: 1px solid #d1d8e0;
+    font-family: monospace;
+    font-size: 0.9rem;
+    box-sizing: border-box; /* Important */
+    resize: none;
+}
+textarea:focus {
+    outline: none;
+    border-color: #1976d2;
+    box-shadow: 0 0 5px rgba(25, 118, 210, 0.5);
+}
+h3 { margin-top: 20px; }
+
 /* Drop Zone */
 #drop-zone {
     border: 2px dashed #d1d8e0;
