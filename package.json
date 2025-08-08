@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@upstash/redis": "^1.35.3",
     "@vercel/kv": "^1.0.1"
   }
 }

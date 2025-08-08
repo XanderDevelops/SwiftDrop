@@ -97,10 +97,7 @@
         });
 
         async function startSending(file) {
-            if (!file) { // If user cancels file selection
-                resetApp();
-                return;
-            }
+            if (!file) return;
             showView('sender-loading-view');
             peerConnection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
             dataChannel = peerConnection.createDataChannel('fileTransfer');
@@ -117,16 +114,12 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ offer: peerConnection.localDescription })
                         });
-                        if (!response.ok) {
-                            const errorData = await response.json();
-                            throw new Error(errorData.error || 'Unknown error from server.');
-                        }
                         const { code } = await response.json();
                         document.getElementById('room-code-display').textContent = code;
                         showView('sender-code-view');
                         pollForAnswer(code);
                     } catch (e) {
-                        alert(`Error creating room: ${e.message}`);
+                        alert('Error: Could not connect to server.');
                         resetApp();
                     }
                 }
@@ -144,18 +137,16 @@
                             await peerConnection.setRemoteDescription(room.answer);
                         }
                     } else {
-                        // Room might have expired or not exist if receiver cancelled/code was bad
                         clearInterval(pollingInterval);
-                        const errorData = await response.json();
-                        alert(`Room error: ${errorData.error || 'Room expired or does not exist.'}`);
+                        alert('Room expired or does not exist.');
                         resetApp();
                     }
                 } catch(e) {
                     clearInterval(pollingInterval);
-                    alert('Lost connection to server during polling.');
+                    alert('Connection to server lost.');
                     resetApp();
                 }
-            }, 3000); // Poll every 3 seconds
+            }, 3000);
         }
 
         async function sendFile(file) {
@@ -167,17 +158,11 @@
             status.textContent = `Sending: ${file.name}`;
             dataChannel.send(JSON.stringify({ name: file.name, size: file.size }));
 
-            const CHUNK_SIZE = 262144; // 256KB
+            const CHUNK_SIZE = 262144;
             let offset = 0;
             const fileReader = new FileReader();
 
             fileReader.onload = e => {
-                // Backpressure handling (wait if buffer is full)
-                if (dataChannel.bufferedAmount > dataChannel.bufferedAmountLowThreshold + CHUNK_SIZE * 2) { // Add a small buffer
-                    setTimeout(() => fileReader.readAsArrayBuffer(file.slice(offset, offset + CHUNK_SIZE)), 50); // Retry soon
-                    return;
-                }
-
                 dataChannel.send(e.target.result);
                 offset += e.target.result.byteLength;
                 const percent = Math.round((offset / file.size) * 100);
@@ -200,46 +185,33 @@
         document.getElementById('receive-btn').addEventListener('click', () => showView('receiver-view'));
         document.getElementById('join-btn').addEventListener('click', async () => {
             const code = document.getElementById('room-code-input').value;
-            if (code.length !== 6) {
-                alert('Please enter a 6-digit code.');
-                return;
-            }
+            if (code.length !== 6) return alert('Please enter a 6-digit code.');
 
-            try {
-                const response = await fetch(`/api/room?code=${code}`);
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Unknown room error.');
+            const response = await fetch(`/api/room?code=${code}`);
+            if (!response.ok) return alert('Room not found. Please check the code.');
+            const room = await response.json();
+            
+            peerConnection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+            peerConnection.ondatachannel = event => {
+                dataChannel = event.channel;
+                receiveFile();
+            };
+
+            await peerConnection.setRemoteDescription(room.offer);
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+
+            peerConnection.onicecandidate = async event => {
+                if (!event.candidate) {
+                    // THIS IS THE CORRECTED LINE:
+                    await fetch(`/api/room?code=${code}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        // The body only needs the answer now
+                        body: JSON.stringify({ answer: peerConnection.localDescription })
+                    });
                 }
-                const room = await response.json();
-                
-                peerConnection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-                peerConnection.ondatachannel = event => {
-                    dataChannel = event.channel;
-                    receiveFile();
-                };
-
-                await peerConnection.setRemoteDescription(room.offer);
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-
-                peerConnection.onicecandidate = async event => {
-                    if (!event.candidate) {
-                        const updateResponse = await fetch('/api/room', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ code, answer: peerConnection.localDescription })
-                        });
-                        if (!updateResponse.ok) {
-                            const errorData = await updateResponse.json();
-                            throw new Error(errorData.error || 'Failed to send answer to server.');
-                        }
-                    }
-                };
-            } catch (e) {
-                alert(`Error joining room: ${e.message}`);
-                resetApp();
-            }
+            };
         });
 
         function receiveFile() {
@@ -250,11 +222,11 @@
             let fileInfo, writer, receivedSize = 0;
 
             dataChannel.onmessage = e => {
-                if (typeof e.data === 'string') { // First message is file metadata
+                if (typeof e.data === 'string') {
                     fileInfo = JSON.parse(e.data);
                     writer = streamSaver.createWriteStream(fileInfo.name, { size: fileInfo.size }).getWriter();
                     status.textContent = `Receiving: ${fileInfo.name}`;
-                } else if (writer) { // Subsequent messages are chunks
+                } else if (writer) {
                     writer.write(new Uint8Array(e.data));
                     receivedSize += e.data.byteLength;
                     const percent = Math.round((receivedSize / fileInfo.size) * 100);
@@ -270,9 +242,6 @@
                 }
             };
         }
-
-        // --- App Initialization ---
-        document.addEventListener('DOMContentLoaded', resetApp);
     </script>
 </body>
 </html>
