@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SwiftDrop - Local File Transfer</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+    <div id="app-container">
+        
+        <h1>SwiftDrop</h1>
+
+        <!-- Initial View: File Selection -->
+        <div id="initial-view">
+            <div id="drop-zone">
+                <p>Drag & Drop a file here</p>
+                <p>or</p>
+                <label for="file-input" class="btn btn-primary">Select File</label>
+                <input type="file" id="file-input">
+            </div>
+            <p id="selected-file-name"></p>
+            <button id="send-button" disabled>Send File</button>
+            <p id="limit-note">
+                Tip: Keep both devices on the same Wi-Fi network with the page open.
+            </p>
+        </div>
+
+        <!-- Progress View: Shows during transfer (for both sender and receiver) -->
+        <div id="progress-view" style="display: none;">
+            <p id="status"></p>
+            <div id="progress-bar-container">
+                <div id="progress-bar"></div>
+            </div>
+            <p id="progress-text"></p>
+        </div>
+
+        <!-- Send Complete View: Shows on sender's side after success -->
+        <div id="send-complete-view" style="display: none;">
+             <h2>File Sent!</h2>
+             <p>The file has been successfully sent to the other device.</p>
+             <button id="send-another-button" class="btn btn-secondary">Send Another File</button>
+        </div>
+
+        <!-- Receive Complete View: Shows on receiving end -->
+        <div id="receive-complete-view" style="display: none;">
+            <h2>Download Ready!</h2>
+            <p>You have received a file:</p>
+            <p id="file-name"></p>
+            <a id="download-button" href="#" download class="btn btn-primary">Download</a>
+            <button id="receive-another-button" class="btn btn-secondary">Ready for Next File</button>
+        </div>
+
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.6/StreamSaver.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
