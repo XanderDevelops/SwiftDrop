@@ -4,7 +4,7 @@
     <title>SwiftDrop - Simple File Transfer</title>
     <style>
         body { font-family: system-ui, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f0f2f5; margin: 0; }
-        #app { width: 400px; background: #fff; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); padding: 30px; text-align: center; }
+        #app { width: 420px; background: #fff; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); padding: 30px; text-align: center; }
         .view { display: none; }
         .view.active { display: block; }
         h1 { font-size: 1.8rem; color: #1a237e; margin-bottom: 20px; }
@@ -18,6 +18,8 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         #progress-bar { width: 100%; height: 10px; background-color: #e0e0e0; border-radius: 5px; overflow: hidden; margin: 15px 0 5px 0; }
         #progress { width: 0; height: 100%; background-color: #1976d2; transition: width 0.2s; }
+        #drop-zone { border: 2px dashed #aaa; border-radius: 10px; padding: 20px; margin-top: 15px; color: #666; }
+        #donate { margin-top: 10px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -25,13 +27,17 @@
         <!-- Home View -->
         <div id="home-view" class="view active">
             <h1>SwiftDrop</h1>
-            <button id="send-btn" class="btn btn-primary">Send File</button>
+            <button id="send-btn" class="btn btn-primary">Send Files</button>
             <button id="receive-btn" class="btn btn-primary">Receive File</button>
+            <div id="drop-zone">Or drag files here to send</div>
+            <div id="donate">
+                <a href="https://buymeacoffee.com/xanderdevelops" target="_blank">☕ Donate</a>
+            </div>
         </div>
 
         <!-- Sender Views -->
         <div id="sender-loading-view" class="view">
-            <h2>Generating your code...</h2>
+            <h2>Preparing files...</h2>
             <div class="loader"></div>
         </div>
         <div id="sender-code-view" class="view">
@@ -62,6 +68,7 @@
         <div id="complete-view" class="view">
             <h2 id="complete-title"></h2>
             <p id="complete-message"></p>
+            <button id="redownload-btn" class="btn btn-primary" style="display:none;">Re-download</button>
             <button class="btn btn-primary" onclick="resetApp()">Start Another Transfer</button>
         </div>
     </div>
@@ -69,9 +76,8 @@
     <script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.6/StreamSaver.min.js"></script>
     <script>
         const streamSaver = window.streamSaver;
-        let peerConnection;
-        let dataChannel;
-        let pollingInterval;
+        let peerConnection, dataChannel, pollingInterval, receivedBlob;
+        let fileQueue = [];
 
         const views = document.querySelectorAll('.view');
         function showView(viewId) {
@@ -82,80 +88,89 @@
         function resetApp() {
             if (peerConnection) peerConnection.close();
             if (pollingInterval) clearInterval(pollingInterval);
+            fileQueue = [];
             document.getElementById('room-code-input').value = '';
+            document.getElementById('redownload-btn').style.display = 'none';
             showView('home-view');
         }
-
         document.querySelectorAll('.cancel-btn').forEach(b => b.addEventListener('click', resetApp));
 
-        // --- SENDER LOGIC ---
+        // SEND
         document.getElementById('send-btn').addEventListener('click', () => {
             const input = document.createElement('input');
             input.type = 'file';
-            input.onchange = e => startSending(e.target.files[0]);
+            input.multiple = true;
+            input.onchange = e => startSending([...e.target.files]);
             input.click();
         });
 
-        async function startSending(file) {
-            if (!file) return;
+        // Drag-and-drop
+        const dropZone = document.getElementById('drop-zone');
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.background = '#eef'; });
+        dropZone.addEventListener('dragleave', e => { dropZone.style.background = ''; });
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropZone.style.background = '';
+            const files = [...e.dataTransfer.files];
+            if (files.length) startSending(files);
+        });
+
+        async function startSending(files) {
+            if (!files.length) return;
+            fileQueue = files;
             showView('sender-loading-view');
+
             peerConnection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
             dataChannel = peerConnection.createDataChannel('fileTransfer');
-            dataChannel.onopen = () => sendFile(file);
+            dataChannel.onopen = () => sendNextFile();
 
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
 
             peerConnection.onicecandidate = async event => {
                 if (!event.candidate) {
-                    try {
-                        const response = await fetch('/api/create', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ offer: peerConnection.localDescription })
-                        });
-                        const { code } = await response.json();
-                        document.getElementById('room-code-display').textContent = code;
-                        showView('sender-code-view');
-                        pollForAnswer(code);
-                    } catch (e) {
-                        alert('Error: Could not connect to server.');
-                        resetApp();
-                    }
+                    const response = await fetch('/api/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ offer: peerConnection.localDescription })
+                    });
+                    const { code } = await response.json();
+                    document.getElementById('room-code-display').textContent = code;
+                    showView('sender-code-view');
+                    pollForAnswer(code);
                 }
             };
         }
 
         function pollForAnswer(code) {
             pollingInterval = setInterval(async () => {
-                try {
-                    const response = await fetch(`/api/room?code=${code}`);
-                    if (response.ok) {
-                        const room = await response.json();
-                        if (room.answer) {
-                            clearInterval(pollingInterval);
-                            await peerConnection.setRemoteDescription(room.answer);
-                        }
-                    } else {
+                const response = await fetch(`/api/room?code=${code}`);
+                if (response.ok) {
+                    const room = await response.json();
+                    if (room.answer) {
                         clearInterval(pollingInterval);
-                        alert('Room expired or does not exist.');
-                        resetApp();
+                        await peerConnection.setRemoteDescription(room.answer);
                     }
-                } catch(e) {
-                    clearInterval(pollingInterval);
-                    alert('Connection to server lost.');
-                    resetApp();
                 }
             }, 3000);
         }
 
-        async function sendFile(file) {
+        async function sendNextFile() {
+            if (!fileQueue.length) {
+                document.getElementById('complete-title').textContent = 'All Files Sent!';
+                document.getElementById('complete-message').textContent = 'Transfer complete.';
+                showView('complete-view');
+                return;
+            }
+            const file = fileQueue.shift();
             showView('progress-view');
             const status = document.getElementById('status');
             const progress = document.getElementById('progress');
             const progressText = document.getElementById('progress-text');
 
             status.textContent = `Sending: ${file.name}`;
+            progress.style.width = '0%';
+            progressText.textContent = '0%';
             dataChannel.send(JSON.stringify({ name: file.name, size: file.size }));
 
             const CHUNK_SIZE = 262144;
@@ -172,25 +187,23 @@
                 if (offset < file.size) {
                     readSlice(offset);
                 } else {
-                    document.getElementById('complete-title').textContent = 'File Sent!';
-                    document.getElementById('complete-message').textContent = `Successfully sent ${file.name}.`;
-                    showView('complete-view');
+                    sendNextFile();
                 }
             };
             const readSlice = o => fileReader.readAsArrayBuffer(file.slice(o, o + CHUNK_SIZE));
             readSlice(0);
         }
 
-        // --- RECEIVER LOGIC ---
+        // RECEIVE
         document.getElementById('receive-btn').addEventListener('click', () => showView('receiver-view'));
         document.getElementById('join-btn').addEventListener('click', async () => {
             const code = document.getElementById('room-code-input').value;
             if (code.length !== 6) return alert('Please enter a 6-digit code.');
 
             const response = await fetch(`/api/room?code=${code}`);
-            if (!response.ok) return alert('Room not found. Please check the code.');
+            if (!response.ok) return alert('Room not found.');
             const room = await response.json();
-            
+
             peerConnection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
             peerConnection.ondatachannel = event => {
                 dataChannel = event.channel;
@@ -203,11 +216,9 @@
 
             peerConnection.onicecandidate = async event => {
                 if (!event.candidate) {
-                    // THIS IS THE CORRECTED LINE:
                     await fetch(`/api/room?code=${code}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        // The body only needs the answer now
                         body: JSON.stringify({ answer: peerConnection.localDescription })
                     });
                 }
@@ -220,23 +231,37 @@
             const progress = document.getElementById('progress');
             const progressText = document.getElementById('progress-text');
             let fileInfo, writer, receivedSize = 0;
+            let chunks = [];
 
             dataChannel.onmessage = e => {
                 if (typeof e.data === 'string') {
                     fileInfo = JSON.parse(e.data);
-                    writer = streamSaver.createWriteStream(fileInfo.name, { size: fileInfo.size }).getWriter();
+                    receivedSize = 0;
+                    chunks = [];
                     status.textContent = `Receiving: ${fileInfo.name}`;
-                } else if (writer) {
-                    writer.write(new Uint8Array(e.data));
+                } else {
+                    chunks.push(e.data);
                     receivedSize += e.data.byteLength;
                     const percent = Math.round((receivedSize / fileInfo.size) * 100);
                     progress.style.width = `${percent}%`;
                     progressText.textContent = `${percent}%`;
 
                     if (receivedSize === fileInfo.size) {
-                        writer.close();
+                        receivedBlob = new Blob(chunks);
+                        const url = URL.createObjectURL(receivedBlob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = fileInfo.name;
+                        a.click();
+                        document.getElementById('redownload-btn').onclick = () => {
+                            const a2 = document.createElement('a');
+                            a2.href = url;
+                            a2.download = fileInfo.name;
+                            a2.click();
+                        };
+                        document.getElementById('redownload-btn').style.display = 'inline-block';
                         document.getElementById('complete-title').textContent = 'Download Complete!';
-                        document.getElementById('complete-message').textContent = `${fileInfo.name} has been saved to your Downloads.`;
+                        document.getElementById('complete-message').textContent = `${fileInfo.name} downloaded.`;
                         showView('complete-view');
                     }
                 }
